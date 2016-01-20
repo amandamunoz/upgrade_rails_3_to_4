@@ -2,8 +2,10 @@
 
 Last February, it was announced that Ruby 1.9.x will no longer be supported. For a variety of reasons, I only recently bumped the app I work on up to 2.1.6.
 The upgrade went swimmingly - I had to update change `pry-debugger` to `pry-byebug`, and lock `therubyracer` at `~> 0.12.1`, but my test suite passed, everything was looking good in staging, and I felt so great that I thought Fantastic! Let's update Rails, too! (Disclaimer, it has been on my to-do list for a while. And by "let's", I mean me.)
+
 Mistake number 1: underestimating the amount of work this would take.
-Initially I just went for it and soon realized that was an absolutely terrible idea, as some major gems my app uses - `rspec`, `meta_search`, `devise` - have had significant upgrades made in the past few years (which, in an ideal world, would have been more frequently upgraded). So, instead of foolishly trying to upgrade everything, including rails, at once, I broke it down into the following steps:
+
+Initially I just went for it and soon realized that was an absolutely terrible idea, as some major gems my app uses - `rspec`, `meta_search`, `devise` - have had significant upgrades made in the past few years (which, in an ideal world, would have been up to date for the version of rails they were working with). So, instead of foolishly trying to upgrade everything, including rails, at once, I broke it down into the following steps:
 
 * Upgrade ruby to 2.1.6 (check)
 * Upgrade `rspec`
@@ -11,27 +13,38 @@ Initially I just went for it and soon realized that was an absolutely terrible i
 * Upgrade `devise`
 
 ##### Upgrading rspec
-[This relish post](https://relishapp.com/rspec/docs/upgrade) provides great step-by-step instructions to upgrade rspec 2.x to 3.0.  I first installed rspec 2.99 to get deprecations, installed and ran transpec for syntax updates, and manually updated some particularly poorly written specs. Once I actually upgraded to rspec 3.0 I still had a little cleaning up to do, but not much. Once everything was passing with no deprecations I bumped up to the latest version (3.4.0).
+[This relish post](https://relishapp.com/rspec/docs/upgrade) provides great step-by-step instructions to upgrade rspec 2.x to 3.0. In summary, I first installed rspec 2.99 to get deprecations, installed and ran transpec for syntax updates, and manually updated some particularly poorly written specs. Once I actually upgraded to rspec 3.0 I still had a little cleaning up to do, but not much. When everything was passing with no deprecations I bumped up to the latest version (3.4.0).
+
 After bumping to the latest version with all specs passing, I had to update the configuration. I moved my existing `spec_helper` into a new `rails_helper` and ran `rails generate rspec:install`.
 
 ##### Upgrading meta_search
-Upgrading `meta_search` was a little trickier than rspec. The syntax for certain search terms is _slightly_ diffrent (`_less_than_or_equal_to` becomes `_lteq`, for example). Instead of looking for the `[:search]` parameter, ransack looks for `[:q]`. ActiveRecord::Relation methods may no longer be used directly on the search object, but on the search results. So, instead of `@query.where(..`, `@query.result.where(..` must be called.
+Upgrading `meta_search` was a little trickier than rspec.
+
+There are three main differences I had to account for:
+* The syntax for certain search terms is _slightly_ diffrent (`_less_than_or_equal_to` becomes `_lteq`, for example).
+* Instead of looking for the `[:search]` parameter, ransack looks for `[:q]`.
+* ActiveRecord::Relation methods may no longer be used directly on the search object, but on the search results. So, instead of `@query.where(..`, `@query.result.where(..` must be called.
 
 ##### Upgrading devise
 I added `gem 'devise', '3.0.0.rc'` to my gemfile, bundled, and ran `rails g devise:install`. It was super simple and I ran my test suite with no errors. I bumped it up to it's latest release, tweaked some method overrides, added a secret key, and again had a passing test suite.
-....Then I tested in staging and my user confirmation emails weren't allowing users to confirm and log in to the site.
+
+....Then I tested in staging and my user confirmation emails weren't allowing users to confirm and log in to the site. (This is when I realized there wasn't complete devise coverage in my test suite.)
+
 I took a few steps back and, instead of foolishly jumping from v 3.0 to 3.5 (have I learned nothing?) I took a step up to 3.1 and got help from the devise changelog. (I left it theren and didn't jump any further :speak_no_evil:)
 
 ##### Upgrading Rails!... to 4.0
 A coworker of mine told me to first upgrade to rails 4 to get deprecations, then to 4.1. I changed the rails version in my gemfile bundled and, uh oh, conflicting versions of `railties`. `sass-rails`, `jquery-rails` and `paper_trail` were locked at versions that didn't play with rails 4. I removed the locks, deleted my gemfile and bundled. I then ran `rake rails:update`.
-...`rake rails:update` broke, which reminded me of another tip from a coworker - in my gemfile, I used `gem 'rails', git: 'git@github.com:rails/rails.git', branch: '4-0-stable'`
-Once i went through the `rake rails:upgrade` tasks (when in doubt, I would refer to github and see if what was in the file was from the initial commit. I'd also compare against established rails 4 apps)
-I committed, then tried running rpsec and hit a name error on Faker in my factories - turns out instead of calling Faker I had to call FFaker.
-Going through my specs until they all passed, a common deprecation was using `scope`/`scoped`. Most errors and deprecations were pretty straightforward.
 
-Once all specs were passing (:raised_hands:) I bumped up rails to just 4.0. Easy as pie.
+...which was broken, and reminded me of another tip from a coworker - in my gemfile, I used `gem 'rails', git: 'git@github.com:rails/rails.git', branch: '4-0-stable'`
+
+Once I went through the `rake rails:upgrade` tasks (when in doubt, I would refer to github and see if what was in the file was from the initial commit. I'd also compare against established rails 4 apps) I tried running rpsec and hit a name error on `Faker` in my factories - turns out instead of calling `Faker` I had to call `FFaker`.
+
+Going through my specs until they all passed, a common deprecation was using `scope` and `scoped`. Most errors and deprecations were pretty straightforward.
+
+Once all specs were passing (:raised_hands:) I bumped up rails to just 4.0.
 
 Testing in the UI, I realized non of my javascript was working. Running a console in the browser, I realized I was getting the error `Uncaught TypeError: $(...).find(...).datepicker` is not a function. I resolved this by adding `jquery-ui-rails` to my gemfile and requiring `jquery-ui` in my `application.js`.
 
 ##### Upgrading from 4.0 to 4.1
+
 Very smooth, since I listened to all of the deprecation warnings in rails 4.
